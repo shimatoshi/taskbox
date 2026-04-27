@@ -51,7 +51,7 @@ export function TaskCard({
       style={depth > 0 ? { marginLeft: `${depth * 18}px` } : undefined}
     >
       <div className="card__head">
-        {showDragHandle && depth === 0 && (
+        {showDragHandle && (
           <span className="card__drag" data-drag-handle aria-label="並び替え">⠿</span>
         )}
         {depth > 0 && <span className="card__sublink" aria-hidden>↳</span>}

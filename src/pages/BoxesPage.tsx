@@ -39,13 +39,13 @@ export function BoxesPage({ store, onEditTask }: Props) {
     reorderTask,
   } = store
   const [open, setOpen] = useState<Set<string>>(new Set())
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER)
   const [editingBox, setEditingBox] = useState<Box | null>(null)
   const [, tick] = useState(0)
 
-  const toggleCollapsed = (id: string) =>
-    setCollapsed((cur) => {
+  const toggleExpanded = (id: string) =>
+    setExpanded((cur) => {
       const next = new Set(cur)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -53,10 +53,10 @@ export function BoxesPage({ store, onEditTask }: Props) {
     })
 
   const expandTask = (id: string) =>
-    setCollapsed((cur) => {
-      if (!cur.has(id)) return cur
+    setExpanded((cur) => {
+      if (cur.has(id)) return cur
       const next = new Set(cur)
-      next.delete(id)
+      next.add(id)
       return next
     })
 
@@ -90,15 +90,17 @@ export function BoxesPage({ store, onEditTask }: Props) {
             const cached = getCachedBox(b.id)
             const filtered = cached ? applyFilter(cached, filter, labels) : []
             const builtTree = cached ? buildTree(cached, filtered) : []
-            const tree = flattenTree(builtTree, (id) => collapsed.has(id))
-            const childCounts = new Map<string, number>()
-            const walkCounts = (nodes: typeof builtTree) => {
-              for (const n of nodes) {
-                childCounts.set(n.task.id, n.children.length)
-                walkCounts(n.children)
+            const tree = flattenTree(builtTree, (id) => !expanded.has(id))
+            const descendantCounts = new Map<string, number>()
+            const countDesc = (node: { task: { id: string }; children: typeof builtTree }): number => {
+              let total = 0
+              for (const child of node.children) {
+                total += 1 + countDesc(child)
               }
+              descendantCounts.set(node.task.id, total)
+              return total
             }
-            walkCounts(builtTree)
+            for (const n of builtTree) countDesc(n)
             const dl = b.deadline ? deadlineState(b.deadline) : null
             return (
               <section key={b.id} className="accordion__item">
@@ -142,10 +144,10 @@ export function BoxesPage({ store, onEditTask }: Props) {
                         tree={tree}
                         cached={cached}
                         labels={labels}
-                        childCounts={childCounts}
-                        collapsed={collapsed}
+                        descendantCounts={descendantCounts}
+                        expanded={expanded}
                         isManual={filter.sort === 'manual'}
-                        onToggleCollapse={toggleCollapsed}
+                        onToggleExpand={toggleExpanded}
                         onProgress={(taskId, p) => setProgress(b.id, taskId, p)}
                         onRemove={(taskId) => {
                           const node = tree.find((n) => n.task.id === taskId)
@@ -180,11 +182,12 @@ export function BoxesPage({ store, onEditTask }: Props) {
                           expandTask(parentId)
                         }}
                         onReorder={(fromIdx, toIdx) => {
-                          const rootTasks = tree.filter((n) => n.depth === 0)
-                          const fromTask = rootTasks[fromIdx]
-                          if (!fromTask) return
-                          const rawIdx = cached.findIndex((t) => t.id === rootTasks[toIdx]?.task.id)
-                          if (rawIdx >= 0) reorderTask(b.id, fromTask.task.id, rawIdx)
+                          const fromNode = tree[fromIdx]
+                          const toNode = tree[toIdx]
+                          if (!fromNode || !toNode) return
+                          if (fromNode.task.parentId !== toNode.task.parentId) return
+                          const rawIdx = cached.findIndex((t) => t.id === toNode.task.id)
+                          if (rawIdx >= 0) reorderTask(b.id, fromNode.task.id, rawIdx)
                         }}
                       />
                     )}
@@ -211,10 +214,10 @@ type BoxCardListProps = {
   tree: ReturnType<typeof flattenTree>
   cached: Task[]
   labels: import('../types').Label[]
-  childCounts: Map<string, number>
-  collapsed: Set<string>
+  descendantCounts: Map<string, number>
+  expanded: Set<string>
   isManual: boolean
-  onToggleCollapse: (id: string) => void
+  onToggleExpand: (id: string) => void
   onProgress: (taskId: string, p: Task['progress']) => void
   onRemove: (taskId: string) => void
   onEdit: (task: Task) => void
@@ -225,10 +228,10 @@ type BoxCardListProps = {
 function BoxCardList({
   tree,
   labels,
-  childCounts,
-  collapsed,
+  descendantCounts,
+  expanded,
   isManual,
-  onToggleCollapse,
+  onToggleExpand,
   onProgress,
   onRemove,
   onEdit,
@@ -241,31 +244,25 @@ function BoxCardList({
   )
   const { containerRef, dragProps } = useDragReorder({ onReorder: handleReorder })
 
-  // Build drag index for root-level nodes only
-  let dragIdx = 0
-
   return (
     <div className="cards" ref={containerRef} {...(isManual ? dragProps : {})}>
-      {tree.map((node) => {
-        const idx = node.depth === 0 ? dragIdx++ : -1
-        return (
-          <div key={node.task.id} data-drag-idx={node.depth === 0 ? idx : undefined}>
-            <TaskCard
-              task={node.task}
-              labels={labels}
-              depth={node.depth}
-              childCount={childCounts.get(node.task.id) ?? 0}
-              collapsed={collapsed.has(node.task.id)}
-              showDragHandle={isManual}
-              onToggleCollapse={() => onToggleCollapse(node.task.id)}
-              onProgress={(p) => onProgress(node.task.id, p)}
-              onRemove={() => onRemove(node.task.id)}
-              onEdit={() => onEdit(node.task)}
-              onAddSub={async (title) => onAddSub(node.task.id, title)}
-            />
-          </div>
-        )
-      })}
+      {tree.map((node, idx) => (
+        <div key={node.task.id} data-drag-idx={idx}>
+          <TaskCard
+            task={node.task}
+            labels={labels}
+            depth={node.depth}
+            childCount={descendantCounts.get(node.task.id) ?? 0}
+            collapsed={!expanded.has(node.task.id)}
+            showDragHandle={isManual}
+            onToggleCollapse={() => onToggleExpand(node.task.id)}
+            onProgress={(p) => onProgress(node.task.id, p)}
+            onRemove={() => onRemove(node.task.id)}
+            onEdit={() => onEdit(node.task)}
+            onAddSub={async (title) => onAddSub(node.task.id, title)}
+          />
+        </div>
+      ))}
     </div>
   )
 }
