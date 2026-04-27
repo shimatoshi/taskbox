@@ -87,6 +87,12 @@ export function useStore() {
     return box
   }
 
+  const updateBox = async (boxId: string, patch: Partial<Box>) => {
+    const next = boxes.map((b) => (b.id === boxId ? { ...b, ...patch } : b))
+    setBoxes(next)
+    await saveBoxes(next)
+  }
+
   const removeBox = async (boxId: string) => {
     const next = boxes.filter((b) => b.id !== boxId)
     setBoxes(next)
@@ -213,6 +219,7 @@ export function useStore() {
     manifest,
     completed,
     addBox,
+    updateBox,
     removeBox,
     addLabel,
     updateLabel,

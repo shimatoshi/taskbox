@@ -5,6 +5,7 @@ export type Box = {
   name: string
   color: string
   createdAt: number
+  deadline?: string
 }
 
 export type Label = {

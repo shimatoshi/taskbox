@@ -1,20 +1,43 @@
 import { AnimatePresence } from 'framer-motion'
 import { useEffect, useState } from 'react'
+import { BoxEditModal } from '../components/BoxEditModal'
 import { TaskCard } from '../components/TaskCard'
 import { TaskFilterBar } from '../components/TaskFilterBar'
 import type { Store } from '../hooks/useStore'
 import { applyFilter, DEFAULT_FILTER, type FilterState } from '../lib/filterSort'
-import type { Task } from '../types'
+import type { Box, Task } from '../types'
 
 type Props = {
   store: Store
   onEditTask: (task: Task) => void
 }
 
+function deadlineState(deadline: string): { label: string; tone: 'overdue' | 'soon' | 'far' } {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const target = new Date(deadline + 'T00:00:00')
+  const days = Math.round((target.getTime() - today.getTime()) / 86_400_000)
+  if (days < 0) return { label: `${-days}日超過`, tone: 'overdue' }
+  if (days === 0) return { label: '今日', tone: 'soon' }
+  if (days <= 3) return { label: `あと${days}日`, tone: 'soon' }
+  return { label: `あと${days}日`, tone: 'far' }
+}
+
 export function BoxesPage({ store, onEditTask }: Props) {
-  const { boxes, labels, manifest, ensureBoxLoaded, getCachedBox, setProgress, removeTask, removeBox } = store
+  const {
+    boxes,
+    labels,
+    manifest,
+    ensureBoxLoaded,
+    getCachedBox,
+    setProgress,
+    removeTask,
+    removeBox,
+    updateBox,
+  } = store
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER)
+  const [editing, setEditing] = useState<Box | null>(null)
   const [, tick] = useState(0)
 
   const toggle = async (boxId: string) => {
@@ -46,6 +69,7 @@ export function BoxesPage({ store, onEditTask }: Props) {
             const isOpen = open.has(b.id)
             const cached = getCachedBox(b.id)
             const filtered = cached ? applyFilter(cached, filter, labels) : []
+            const dl = b.deadline ? deadlineState(b.deadline) : null
             return (
               <section key={b.id} className="accordion__item">
                 <header className="accordion__head">
@@ -53,7 +77,19 @@ export function BoxesPage({ store, onEditTask }: Props) {
                     <span className="accordion__chev">{isOpen ? '▼' : '▶'}</span>
                     <span className="accordion__color" style={{ background: b.color }} />
                     <span className="accordion__name">{b.name}</span>
+                    {dl && (
+                      <span className={`accordion__deadline accordion__deadline--${dl.tone}`}>
+                        {dl.label}
+                      </span>
+                    )}
                     <span className="accordion__count">{manifest[b.id] ?? 0}</span>
+                  </button>
+                  <button
+                    className="accordion__edit"
+                    onClick={() => setEditing(b)}
+                    aria-label="編集"
+                  >
+                    ✎
                   </button>
                   <button
                     className="accordion__remove"
@@ -92,6 +128,13 @@ export function BoxesPage({ store, onEditTask }: Props) {
             )
           })}
         </div>
+      )}
+      {editing && (
+        <BoxEditModal
+          box={editing}
+          onClose={() => setEditing(null)}
+          onSave={(patch) => updateBox(editing.id, patch)}
+        />
       )}
     </div>
   )
