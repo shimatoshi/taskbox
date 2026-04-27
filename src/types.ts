@@ -31,4 +31,4 @@ export type Manifest = Record<string, number>
 
 export type Tab = 'create' | 'boxes' | 'all'
 
-export type SortKey = 'createdAt' | 'progress' | 'label' | 'title'
+export type SortKey = 'manual' | 'createdAt' | 'progress' | 'label' | 'title'

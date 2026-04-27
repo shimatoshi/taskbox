@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { BoxEditModal } from '../components/BoxEditModal'
 import { TaskCard } from '../components/TaskCard'
 import { TaskFilterBar } from '../components/TaskFilterBar'
+import { useDragReorder } from '../hooks/useDragReorder'
 import type { Store } from '../hooks/useStore'
 import { applyFilter, DEFAULT_FILTER, type FilterState } from '../lib/filterSort'
 import { buildTree, flattenTree } from '../lib/tree'
@@ -35,6 +36,7 @@ export function BoxesPage({ store, onEditTask }: Props) {
     removeBox,
     updateBox,
     addTask,
+    reorderTask,
   } = store
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
@@ -135,50 +137,56 @@ export function BoxesPage({ store, onEditTask }: Props) {
                     ) : tree.length === 0 ? (
                       <p className="empty">タスクなし</p>
                     ) : (
-                      <div className="cards">
-                        {tree.map((node) => (
-                            <TaskCard
-                              key={node.task.id}
-                              task={node.task}
-                              labels={labels}
-                              depth={node.depth}
-                              childCount={childCounts.get(node.task.id) ?? 0}
-                              collapsed={collapsed.has(node.task.id)}
-                              onToggleCollapse={() => toggleCollapsed(node.task.id)}
-                              onProgress={(p) => setProgress(b.id, node.task.id, p)}
-                              onRemove={() => {
-                                const desc = cached.filter(
-                                  (t) =>
-                                    t.parentId === node.task.id ||
-                                    cached.some(
-                                      (a) =>
-                                        a.id === t.parentId && a.parentId === node.task.id,
-                                    ),
-                                )
-                                if (
-                                  desc.length === 0 ||
-                                  confirm(
-                                    `「${node.task.title}」とその配下 ${desc.length} 件を削除？`,
-                                  )
-                                ) {
-                                  removeTask(b.id, node.task.id)
-                                }
-                              }}
-                              onEdit={() => onEditTask(node.task)}
-                              onAddSub={async (title) => {
-                                await addTask({
-                                  title,
-                                  description: '',
-                                  boxId: b.id,
-                                  labelIds: [],
-                                  progress: 0,
-                                  parentId: node.task.id,
-                                })
-                                expandTask(node.task.id)
-                              }}
-                            />
-                          ))}
-                      </div>
+                      <BoxCardList
+                        boxId={b.id}
+                        tree={tree}
+                        cached={cached}
+                        labels={labels}
+                        childCounts={childCounts}
+                        collapsed={collapsed}
+                        isManual={filter.sort === 'manual'}
+                        onToggleCollapse={toggleCollapsed}
+                        onProgress={(taskId, p) => setProgress(b.id, taskId, p)}
+                        onRemove={(taskId) => {
+                          const node = tree.find((n) => n.task.id === taskId)
+                          if (!node) return
+                          const desc = cached.filter(
+                            (t) =>
+                              t.parentId === taskId ||
+                              cached.some(
+                                (a) =>
+                                  a.id === t.parentId && a.parentId === taskId,
+                              ),
+                          )
+                          if (
+                            desc.length === 0 ||
+                            confirm(
+                              `「${node.task.title}」とその配下 ${desc.length} 件を削除？`,
+                            )
+                          ) {
+                            removeTask(b.id, taskId)
+                          }
+                        }}
+                        onEdit={(task) => onEditTask(task)}
+                        onAddSub={async (parentId, title) => {
+                          await addTask({
+                            title,
+                            description: '',
+                            boxId: b.id,
+                            labelIds: [],
+                            progress: 0,
+                            parentId,
+                          })
+                          expandTask(parentId)
+                        }}
+                        onReorder={(fromIdx, toIdx) => {
+                          const rootTasks = tree.filter((n) => n.depth === 0)
+                          const fromTask = rootTasks[fromIdx]
+                          if (!fromTask) return
+                          const rawIdx = cached.findIndex((t) => t.id === rootTasks[toIdx]?.task.id)
+                          if (rawIdx >= 0) reorderTask(b.id, fromTask.task.id, rawIdx)
+                        }}
+                      />
                     )}
                   </div>
                 )}
@@ -194,6 +202,70 @@ export function BoxesPage({ store, onEditTask }: Props) {
           onSave={(patch) => updateBox(editingBox.id, patch)}
         />
       )}
+    </div>
+  )
+}
+
+type BoxCardListProps = {
+  boxId: string
+  tree: ReturnType<typeof flattenTree>
+  cached: Task[]
+  labels: import('../types').Label[]
+  childCounts: Map<string, number>
+  collapsed: Set<string>
+  isManual: boolean
+  onToggleCollapse: (id: string) => void
+  onProgress: (taskId: string, p: Task['progress']) => void
+  onRemove: (taskId: string) => void
+  onEdit: (task: Task) => void
+  onAddSub: (parentId: string, title: string) => void
+  onReorder: (fromIdx: number, toIdx: number) => void
+}
+
+function BoxCardList({
+  tree,
+  labels,
+  childCounts,
+  collapsed,
+  isManual,
+  onToggleCollapse,
+  onProgress,
+  onRemove,
+  onEdit,
+  onAddSub,
+  onReorder,
+}: BoxCardListProps) {
+  const handleReorder = useCallback(
+    (from: number, to: number) => onReorder(from, to),
+    [onReorder],
+  )
+  const { containerRef, dragProps } = useDragReorder({ onReorder: handleReorder })
+
+  // Build drag index for root-level nodes only
+  let dragIdx = 0
+
+  return (
+    <div className="cards" ref={containerRef} {...(isManual ? dragProps : {})}>
+      {tree.map((node) => {
+        const idx = node.depth === 0 ? dragIdx++ : -1
+        return (
+          <div key={node.task.id} data-drag-idx={node.depth === 0 ? idx : undefined}>
+            <TaskCard
+              task={node.task}
+              labels={labels}
+              depth={node.depth}
+              childCount={childCounts.get(node.task.id) ?? 0}
+              collapsed={collapsed.has(node.task.id)}
+              showDragHandle={isManual}
+              onToggleCollapse={() => onToggleCollapse(node.task.id)}
+              onProgress={(p) => onProgress(node.task.id, p)}
+              onRemove={() => onRemove(node.task.id)}
+              onEdit={() => onEdit(node.task)}
+              onAddSub={async (title) => onAddSub(node.task.id, title)}
+            />
+          </div>
+        )
+      })}
     </div>
   )
 }

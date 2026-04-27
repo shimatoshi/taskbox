@@ -204,6 +204,16 @@ export function useStore() {
     await writeBox(toBoxId, [...toList, movedTarget, ...movedDesc])
   }
 
+  const reorderTask = async (boxId: string, taskId: string, targetIndex: number) => {
+    const current = await ensureBoxLoaded(boxId)
+    const fromIndex = current.findIndex((t) => t.id === taskId)
+    if (fromIndex < 0 || fromIndex === targetIndex) return
+    const next = [...current]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(targetIndex, 0, moved)
+    await writeBox(boxId, next)
+  }
+
   const setProgress = async (boxId: string, taskId: string, progress: Progress) => {
     if (progress < 5) {
       await updateTask(boxId, taskId, { progress })
@@ -295,6 +305,7 @@ export function useStore() {
     updateTask,
     removeTask,
     moveTask,
+    reorderTask,
     setProgress,
     ensureBoxLoaded,
     getCachedBox,

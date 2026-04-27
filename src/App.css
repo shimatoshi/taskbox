@@ -490,6 +490,37 @@ body,
   flex: 1;
 }
 
+.card__drag {
+  cursor: grab;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  user-select: none;
+  touch-action: none;
+  padding: 2px 4px;
+}
+
+.card__drag:active {
+  cursor: grabbing;
+}
+
+[data-drag-idx].is-dragging {
+  opacity: 0.9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+}
+
+[data-drag-idx].is-dragging > .card {
+  border-color: var(--accent);
+}
+
+.drag-placeholder {
+  background: var(--accent);
+  opacity: 0.15;
+  border-radius: 10px;
+  transition: height 0.1s ease;
+}
+
 .card__edit,
 .card__x {
   background: transparent;

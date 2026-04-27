@@ -7,7 +7,7 @@ export type FilterState = {
 }
 
 export const DEFAULT_FILTER: FilterState = {
-  sort: 'createdAt',
+  sort: 'manual',
   query: '',
   labelIds: [],
 }
@@ -34,6 +34,7 @@ export function applyFilter(
 }
 
 function sortTasks(tasks: Task[], key: SortKey, labels: Label[]): Task[] {
+  if (key === 'manual') return tasks
   const copy = [...tasks]
   if (key === 'createdAt') {
     copy.sort((a, b) => b.createdAt - a.createdAt)

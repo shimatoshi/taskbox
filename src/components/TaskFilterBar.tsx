@@ -8,6 +8,7 @@ type Props = {
 }
 
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
+  { key: 'manual', label: '手動' },
   { key: 'createdAt', label: '日付' },
   { key: 'progress', label: '進捗' },
   { key: 'label', label: 'ラベル' },
