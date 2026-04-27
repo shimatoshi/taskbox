@@ -75,10 +75,14 @@ export function buildTree(allTasks: Task[], visibleInOrder: Task[]): TreeNode[] 
   return build(undefined, 0)
 }
 
-export function flattenTree(nodes: TreeNode[]): TreeNode[] {
+export function flattenTree(
+  nodes: TreeNode[],
+  isCollapsed?: (id: string) => boolean,
+): TreeNode[] {
   const out: TreeNode[] = []
   const walk = (n: TreeNode) => {
     out.push(n)
+    if (isCollapsed?.(n.task.id)) return
     n.children.forEach(walk)
   }
   nodes.forEach(walk)

@@ -1,4 +1,3 @@
-import { motion } from 'framer-motion'
 import { useState } from 'react'
 import type { Box, Label, Task } from '../types'
 import { ProgressDial } from './ProgressDial'
@@ -9,7 +8,9 @@ type Props = {
   box?: Box
   showBox?: boolean
   depth?: number
-  childSummary?: { done: number; total: number }
+  childCount?: number
+  collapsed?: boolean
+  onToggleCollapse?: () => void
   onProgress: (next: Task['progress']) => void
   onRemove: () => void
   onEdit: () => void
@@ -22,7 +23,9 @@ export function TaskCard({
   box,
   showBox,
   depth = 0,
-  childSummary,
+  childCount = 0,
+  collapsed = false,
+  onToggleCollapse,
   onProgress,
   onRemove,
   onEdit,
@@ -41,28 +44,29 @@ export function TaskCard({
   }
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, y: 8, scale: 0.98 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.6 }}
-      transition={{ type: 'spring', stiffness: 380, damping: 28 }}
+    <div
       className="card"
       style={depth > 0 ? { marginLeft: `${depth * 18}px` } : undefined}
     >
       <div className="card__head">
         {depth > 0 && <span className="card__sublink" aria-hidden>↳</span>}
+        {childCount > 0 && onToggleCollapse ? (
+          <button
+            className="card__toggle"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? 'サブを展開' : 'サブを折りたたむ'}
+            title={collapsed ? `サブ ${childCount} 件` : 'サブを折りたたむ'}
+          >
+            <span className="card__toggle-chev">{collapsed ? '▶' : '▼'}</span>
+            <span className="card__toggle-count">{childCount}</span>
+          </button>
+        ) : null}
         {showBox && box && (
           <span className="card__boxtag" style={{ background: box.color }}>
             {box.name}
           </span>
         )}
         <h3 className="card__title">{task.title}</h3>
-        {childSummary && childSummary.total > 0 && (
-          <span className="card__substat" title="サブタスク完了数 / 全数">
-            ✓{childSummary.done}/{childSummary.total}
-          </span>
-        )}
         <button className="card__edit" onClick={onEdit} aria-label="編集">
           ✎
         </button>
@@ -115,6 +119,6 @@ export function TaskCard({
           </button>
         )
       )}
-    </motion.div>
+    </div>
   )
 }
