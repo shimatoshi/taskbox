@@ -509,6 +509,74 @@ body,
   font-size: 16px;
 }
 
+.card__sublink {
+  color: var(--muted);
+  font-size: 12px;
+  margin-right: 2px;
+}
+
+.card__substat {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--panel-3);
+  border-radius: 999px;
+  padding: 1px 6px;
+}
+
+.card__subadd-btn {
+  background: transparent;
+  border: 1px dashed var(--border);
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+  justify-self: start;
+  width: max-content;
+}
+
+.card__subadd-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.card__subadd {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  background: var(--panel-3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.card__subadd input {
+  flex: 1;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.card__subadd button {
+  background: var(--accent);
+  color: #0b1220;
+  border: 0;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.card__subadd-cancel {
+  background: transparent !important;
+  color: var(--muted) !important;
+  font-weight: 400 !important;
+}
+
 .card__desc {
   margin: 0;
   font-size: 12px;

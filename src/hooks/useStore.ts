@@ -13,6 +13,7 @@ import {
   saveManifest,
   dropBoxTasks,
 } from '../db'
+import { descendantsOf } from '../lib/tree'
 import type { Box, Label, Manifest, Progress, Task } from '../types'
 
 const DEFAULT_BOX_COLORS = ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa', '#fb7185']
@@ -57,6 +58,23 @@ export function useStore() {
   const getCachedBox = useCallback((boxId: string): Task[] | undefined => {
     return boxCache.current.get(boxId)
   }, [])
+
+  const ensureAllBoxesLoaded = useCallback(async () => {
+    await Promise.all(
+      boxes.map((b) =>
+        boxCache.current.has(b.id) ? Promise.resolve() : ensureBoxLoaded(b.id),
+      ),
+    )
+  }, [boxes, ensureBoxLoaded])
+
+  const getAllCachedTasks = useCallback((): Task[] => {
+    const out: Task[] = []
+    for (const b of boxes) {
+      const cached = boxCache.current.get(b.id)
+      if (cached) out.push(...cached)
+    }
+    return out
+  }, [boxes])
 
   const ensureCompletedLoaded = useCallback(async () => {
     if (completed) return completed
@@ -136,6 +154,7 @@ export function useStore() {
     labelIds: string[]
     progress: Progress
     deadline?: string
+    parentId?: string
   }) => {
     const task: Task = {
       ...input,
@@ -154,7 +173,11 @@ export function useStore() {
 
   const removeTask = async (boxId: string, taskId: string) => {
     const current = await ensureBoxLoaded(boxId)
-    await writeBox(boxId, current.filter((t) => t.id !== taskId))
+    const target = current.find((t) => t.id === taskId)
+    if (!target) return
+    const desc = descendantsOf(current, taskId)
+    const drop = new Set([taskId, ...desc.map((d) => d.id)])
+    await writeBox(boxId, current.filter((t) => !drop.has(t.id)))
   }
 
   const moveTask = async (
@@ -170,10 +193,15 @@ export function useStore() {
     const fromList = await ensureBoxLoaded(fromBoxId)
     const target = fromList.find((t) => t.id === taskId)
     if (!target) return
-    const moved: Task = { ...target, ...patch, boxId: toBoxId }
-    await writeBox(fromBoxId, fromList.filter((t) => t.id !== taskId))
+    const desc = descendantsOf(fromList, taskId)
+    const moveSet = new Set([taskId, ...desc.map((d) => d.id)])
+    const remaining = fromList.filter((t) => !moveSet.has(t.id))
+    await writeBox(fromBoxId, remaining)
+
     const toList = await ensureBoxLoaded(toBoxId)
-    await writeBox(toBoxId, [...toList, moved])
+    const movedTarget: Task = { ...target, ...patch, boxId: toBoxId }
+    const movedDesc: Task[] = desc.map((d) => ({ ...d, boxId: toBoxId }))
+    await writeBox(toBoxId, [...toList, movedTarget, ...movedDesc])
   }
 
   const setProgress = async (boxId: string, taskId: string, progress: Progress) => {
@@ -181,28 +209,67 @@ export function useStore() {
       await updateTask(boxId, taskId, { progress })
       return
     }
+    await completeTaskAndDescendants(boxId, taskId)
+    await maybeCascadeUp(boxId, taskId)
+  }
+
+  const completeTaskAndDescendants = async (boxId: string, taskId: string) => {
     const current = await ensureBoxLoaded(boxId)
     const target = current.find((t) => t.id === taskId)
     if (!target) return
-    const moved: Task = { ...target, progress: 5, completedAt: Date.now() }
-    const remaining = current.filter((t) => t.id !== taskId)
+    const desc = descendantsOf(current, taskId)
+    const ids = new Set([taskId, ...desc.map((d) => d.id)])
+    const now = Date.now()
+    const movedTarget: Task = { ...target, progress: 5, completedAt: now }
+    const movedDesc: Task[] = desc.map((d) => ({ ...d, completedAt: now }))
+    const remaining = current.filter((t) => !ids.has(t.id))
     await writeBox(boxId, remaining)
     const c = await ensureCompletedLoaded()
-    const nextCompleted = [moved, ...c]
+    const nextCompleted = [movedTarget, ...movedDesc, ...c]
     setCompleted(nextCompleted)
     await saveCompleted(nextCompleted)
   }
 
-  const restoreFromCompleted = async (taskId: string) => {
+  const maybeCascadeUp = async (boxId: string, justCompletedId: string) => {
+    const justCompleted = (await ensureCompletedLoaded()).find((t) => t.id === justCompletedId)
+    const parentId = justCompleted?.parentId
+    if (!parentId) return
+    const current = await ensureBoxLoaded(boxId)
+    const parent = current.find((t) => t.id === parentId)
+    if (!parent) return
+    const remainingChildren = current.filter((t) => t.parentId === parentId)
+    if (remainingChildren.length > 0) return
+    await completeTaskAndDescendants(boxId, parentId)
+    await maybeCascadeUp(boxId, parentId)
+  }
+
+  const restoreFromCompleted = async (taskId: string, includeDescendants = true) => {
     if (!completed) return
     const target = completed.find((t) => t.id === taskId)
     if (!target) return
-    const nextCompleted = completed.filter((t) => t.id !== taskId)
+    const desc = includeDescendants ? descendantsOf(completed, taskId) : []
+    const ids = new Set([taskId, ...desc.map((d) => d.id)])
+    const nextCompleted = completed.filter((t) => !ids.has(t.id))
     setCompleted(nextCompleted)
     await saveCompleted(nextCompleted)
-    const restored: Task = { ...target, progress: 0, completedAt: undefined }
-    const current = await ensureBoxLoaded(target.boxId)
-    await writeBox(target.boxId, [...current, restored])
+
+    const byBox = new Map<string, Task[]>()
+    const restoreOne = (t: Task) => {
+      const restored: Task =
+        t.id === taskId
+          ? { ...t, progress: 0, completedAt: undefined }
+          : { ...t, completedAt: undefined }
+      const arr = byBox.get(t.boxId) ?? []
+      arr.push(restored)
+      byBox.set(t.boxId, arr)
+    }
+    restoreOne(target)
+    desc.forEach(restoreOne)
+
+    for (const [bId, additions] of byBox) {
+      const cur = await ensureBoxLoaded(bId)
+      await writeBox(bId, [...cur, ...additions])
+    }
   }
 
   const purgeCompleted = async (taskId: string) => {
@@ -231,6 +298,8 @@ export function useStore() {
     setProgress,
     ensureBoxLoaded,
     getCachedBox,
+    ensureAllBoxesLoaded,
+    getAllCachedTasks,
     ensureCompletedLoaded,
     restoreFromCompleted,
     purgeCompleted,

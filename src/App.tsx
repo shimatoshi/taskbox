@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BottomNav } from './components/BottomNav'
 import { HeaderBar } from './components/HeaderBar'
 import { TaskEditModal } from './components/TaskEditModal'
@@ -25,6 +25,12 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('create')
   const [overlay, setOverlay] = useState<Overlay>(null)
   const [editing, setEditing] = useState<Task | null>(null)
+
+  useEffect(() => {
+    if (editing) {
+      store.ensureAllBoxesLoaded()
+    }
+  }, [editing, store])
 
   if (!store.ready) {
     return (
@@ -86,11 +92,13 @@ export default function App() {
           task={editing}
           boxes={store.boxes}
           labels={store.labels}
+          candidateParents={store.getAllCachedTasks()}
           onClose={() => setEditing(null)}
           onSave={async (next) => {
             await store.moveTask(editing.boxId, next.boxId, editing.id, {
               title: next.title,
               description: next.description,
+              parentId: next.parentId,
               labelIds: next.labelIds,
               deadline: next.deadline,
             })

@@ -1,24 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { isDescendantOf } from '../lib/tree'
 import type { Box, Label, Task } from '../types'
 
 type Props = {
   task: Task
   boxes: Box[]
   labels: Label[]
+  candidateParents: Task[]
   onSave: (next: {
     title: string
     description: string
     boxId: string
+    parentId?: string
     labelIds: string[]
     deadline?: string
   }) => Promise<void> | void
   onClose: () => void
 }
 
-export function TaskEditModal({ task, boxes, labels, onSave, onClose }: Props) {
+export function TaskEditModal({
+  task,
+  boxes,
+  labels,
+  candidateParents,
+  onSave,
+  onClose,
+}: Props) {
   const [title, setTitle] = useState(task.title)
   const [description, setDescription] = useState(task.description)
   const [boxId, setBoxId] = useState(task.boxId)
+  const [parentId, setParentId] = useState<string | undefined>(task.parentId)
   const [labelIds, setLabelIds] = useState<string[]>(task.labelIds)
   const [deadline, setDeadline] = useState(task.deadline ?? '')
   const [saving, setSaving] = useState(false)
@@ -31,6 +42,17 @@ export function TaskEditModal({ task, boxes, labels, onSave, onClose }: Props) {
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
+  const validParents = useMemo(
+    () =>
+      candidateParents.filter(
+        (c) => c.id !== task.id && !isDescendantOf(candidateParents, task.id, c.id),
+      ),
+    [candidateParents, task.id],
+  )
+
+  const parentTask = parentId ? candidateParents.find((c) => c.id === parentId) : undefined
+  const effectiveBoxId = parentTask ? parentTask.boxId : boxId
+
   const toggleLabel = (id: string) =>
     setLabelIds((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
 
@@ -41,7 +63,8 @@ export function TaskEditModal({ task, boxes, labels, onSave, onClose }: Props) {
       await onSave({
         title: title.trim(),
         description: description.trim(),
-        boxId,
+        boxId: effectiveBoxId,
+        parentId,
         labelIds,
         deadline: deadline || undefined,
       })
@@ -77,18 +100,39 @@ export function TaskEditModal({ task, boxes, labels, onSave, onClose }: Props) {
           />
 
           <div className="draftcard__field">
-            <label>ボックス</label>
+            <label>親タスク</label>
+            <select
+              value={parentId ?? ''}
+              onChange={(e) => setParentId(e.target.value || undefined)}
+            >
+              <option value="">（なし）</option>
+              {validParents.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.title}
+                </option>
+              ))}
+            </select>
+            {parentTask && (
+              <span className="draftcard__hint">
+                親と同じボックスに移動します
+              </span>
+            )}
+          </div>
+
+          <div className="draftcard__field">
+            <label>ボックス {parentTask && '(親に追従)'}</label>
             <div className="chiprow">
               {boxes.map((b) => (
                 <button
                   key={b.id}
-                  className={`chip ${boxId === b.id ? 'is-active' : ''}`}
+                  className={`chip ${effectiveBoxId === b.id ? 'is-active' : ''}`}
                   style={
-                    boxId === b.id
+                    effectiveBoxId === b.id
                       ? { background: b.color, borderColor: b.color, color: '#0b1220' }
                       : { borderColor: b.color, color: b.color }
                   }
-                  onClick={() => setBoxId(b.id)}
+                  onClick={() => !parentTask && setBoxId(b.id)}
+                  disabled={!!parentTask}
                 >
                   {b.name}
                 </button>

@@ -19,6 +19,7 @@ export type Task = {
   title: string
   description: string
   boxId: string
+  parentId?: string
   labelIds: string[]
   progress: Progress
   deadline?: string

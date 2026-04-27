@@ -5,6 +5,7 @@ import { TaskCard } from '../components/TaskCard'
 import { TaskFilterBar } from '../components/TaskFilterBar'
 import type { Store } from '../hooks/useStore'
 import { applyFilter, DEFAULT_FILTER, type FilterState } from '../lib/filterSort'
+import { buildTree, flattenTree } from '../lib/tree'
 import type { Box, Task } from '../types'
 
 type Props = {
@@ -34,10 +35,11 @@ export function BoxesPage({ store, onEditTask }: Props) {
     removeTask,
     removeBox,
     updateBox,
+    addTask,
   } = store
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER)
-  const [editing, setEditing] = useState<Box | null>(null)
+  const [editingBox, setEditingBox] = useState<Box | null>(null)
   const [, tick] = useState(0)
 
   const toggle = async (boxId: string) => {
@@ -69,6 +71,7 @@ export function BoxesPage({ store, onEditTask }: Props) {
             const isOpen = open.has(b.id)
             const cached = getCachedBox(b.id)
             const filtered = cached ? applyFilter(cached, filter, labels) : []
+            const tree = cached ? flattenTree(buildTree(cached, filtered)) : []
             const dl = b.deadline ? deadlineState(b.deadline) : null
             return (
               <section key={b.id} className="accordion__item">
@@ -86,7 +89,7 @@ export function BoxesPage({ store, onEditTask }: Props) {
                   </button>
                   <button
                     className="accordion__edit"
-                    onClick={() => setEditing(b)}
+                    onClick={() => setEditingBox(b)}
                     aria-label="編集"
                   >
                     ✎
@@ -104,19 +107,47 @@ export function BoxesPage({ store, onEditTask }: Props) {
                   <div className="accordion__body">
                     {!cached ? (
                       <p className="empty">読み込み中…</p>
-                    ) : filtered.length === 0 ? (
+                    ) : tree.length === 0 ? (
                       <p className="empty">タスクなし</p>
                     ) : (
                       <div className="cards">
                         <AnimatePresence>
-                          {filtered.map((t) => (
+                          {tree.map((node) => (
                             <TaskCard
-                              key={t.id}
-                              task={t}
+                              key={node.task.id}
+                              task={node.task}
                               labels={labels}
-                              onProgress={(p) => setProgress(b.id, t.id, p)}
-                              onRemove={() => removeTask(b.id, t.id)}
-                              onEdit={() => onEditTask(t)}
+                              depth={node.depth}
+                              onProgress={(p) => setProgress(b.id, node.task.id, p)}
+                              onRemove={() => {
+                                const desc = cached.filter(
+                                  (t) =>
+                                    t.parentId === node.task.id ||
+                                    cached.some(
+                                      (a) =>
+                                        a.id === t.parentId && a.parentId === node.task.id,
+                                    ),
+                                )
+                                if (
+                                  desc.length === 0 ||
+                                  confirm(
+                                    `「${node.task.title}」とその配下 ${desc.length} 件を削除？`,
+                                  )
+                                ) {
+                                  removeTask(b.id, node.task.id)
+                                }
+                              }}
+                              onEdit={() => onEditTask(node.task)}
+                              onAddSub={(title) =>
+                                addTask({
+                                  title,
+                                  description: '',
+                                  boxId: b.id,
+                                  labelIds: [],
+                                  progress: 0,
+                                  parentId: node.task.id,
+                                })
+                              }
                             />
                           ))}
                         </AnimatePresence>
@@ -129,11 +160,11 @@ export function BoxesPage({ store, onEditTask }: Props) {
           })}
         </div>
       )}
-      {editing && (
+      {editingBox && (
         <BoxEditModal
-          box={editing}
-          onClose={() => setEditing(null)}
-          onSave={(patch) => updateBox(editing.id, patch)}
+          box={editingBox}
+          onClose={() => setEditingBox(null)}
+          onSave={(patch) => updateBox(editingBox.id, patch)}
         />
       )}
     </div>
