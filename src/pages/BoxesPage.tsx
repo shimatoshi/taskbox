@@ -4,10 +4,14 @@ import { TaskCard } from '../components/TaskCard'
 import { TaskFilterBar } from '../components/TaskFilterBar'
 import type { Store } from '../hooks/useStore'
 import { applyFilter, DEFAULT_FILTER, type FilterState } from '../lib/filterSort'
+import type { Task } from '../types'
 
-type Props = { store: Store }
+type Props = {
+  store: Store
+  onEditTask: (task: Task) => void
+}
 
-export function BoxesPage({ store }: Props) {
+export function BoxesPage({ store, onEditTask }: Props) {
   const { boxes, labels, manifest, ensureBoxLoaded, getCachedBox, setProgress, removeTask, removeBox } = store
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER)
@@ -76,6 +80,7 @@ export function BoxesPage({ store }: Props) {
                               labels={labels}
                               onProgress={(p) => setProgress(b.id, t.id, p)}
                               onRemove={() => removeTask(b.id, t.id)}
+                              onEdit={() => onEditTask(t)}
                             />
                           ))}
                         </AnimatePresence>

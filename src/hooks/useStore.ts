@@ -111,6 +111,12 @@ export function useStore() {
     return label
   }
 
+  const updateLabel = async (labelId: string, patch: Partial<Label>) => {
+    const next = labels.map((l) => (l.id === labelId ? { ...l, ...patch } : l))
+    setLabels(next)
+    await saveLabels(next)
+  }
+
   const removeLabel = async (labelId: string) => {
     const next = labels.filter((l) => l.id !== labelId)
     setLabels(next)
@@ -143,6 +149,25 @@ export function useStore() {
   const removeTask = async (boxId: string, taskId: string) => {
     const current = await ensureBoxLoaded(boxId)
     await writeBox(boxId, current.filter((t) => t.id !== taskId))
+  }
+
+  const moveTask = async (
+    fromBoxId: string,
+    toBoxId: string,
+    taskId: string,
+    patch: Partial<Task> = {},
+  ) => {
+    if (fromBoxId === toBoxId) {
+      await updateTask(fromBoxId, taskId, patch)
+      return
+    }
+    const fromList = await ensureBoxLoaded(fromBoxId)
+    const target = fromList.find((t) => t.id === taskId)
+    if (!target) return
+    const moved: Task = { ...target, ...patch, boxId: toBoxId }
+    await writeBox(fromBoxId, fromList.filter((t) => t.id !== taskId))
+    const toList = await ensureBoxLoaded(toBoxId)
+    await writeBox(toBoxId, [...toList, moved])
   }
 
   const setProgress = async (boxId: string, taskId: string, progress: Progress) => {
@@ -190,10 +215,12 @@ export function useStore() {
     addBox,
     removeBox,
     addLabel,
+    updateLabel,
     removeLabel,
     addTask,
     updateTask,
     removeTask,
+    moveTask,
     setProgress,
     ensureBoxLoaded,
     getCachedBox,

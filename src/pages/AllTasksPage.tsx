@@ -6,9 +6,12 @@ import type { Store } from '../hooks/useStore'
 import { applyFilter, DEFAULT_FILTER, type FilterState } from '../lib/filterSort'
 import type { Task } from '../types'
 
-type Props = { store: Store }
+type Props = {
+  store: Store
+  onEditTask: (task: Task) => void
+}
 
-export function AllTasksPage({ store }: Props) {
+export function AllTasksPage({ store, onEditTask }: Props) {
   const { boxes, labels, ensureBoxLoaded, getCachedBox, setProgress, removeTask } = store
   const [loaded, setLoaded] = useState(false)
   const [filter, setFilter] = useState<FilterState>(DEFAULT_FILTER)
@@ -60,6 +63,7 @@ export function AllTasksPage({ store }: Props) {
                 showBox
                 onProgress={(p) => setProgress(t.boxId, t.id, p)}
                 onRemove={() => removeTask(t.boxId, t.id)}
+                onEdit={() => onEditTask(t)}
               />
             ))}
           </AnimatePresence>

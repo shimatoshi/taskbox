@@ -9,9 +9,18 @@ type Props = {
   showBox?: boolean
   onProgress: (next: Task['progress']) => void
   onRemove: () => void
+  onEdit: () => void
 }
 
-export function TaskCard({ task, labels, box, showBox, onProgress, onRemove }: Props) {
+export function TaskCard({
+  task,
+  labels,
+  box,
+  showBox,
+  onProgress,
+  onRemove,
+  onEdit,
+}: Props) {
   const taskLabels = labels.filter((l) => task.labelIds.includes(l.id))
 
   return (
@@ -30,6 +39,9 @@ export function TaskCard({ task, labels, box, showBox, onProgress, onRemove }: P
           </span>
         )}
         <h3 className="card__title">{task.title}</h3>
+        <button className="card__edit" onClick={onEdit} aria-label="編集">
+          ✎
+        </button>
         <button className="card__x" onClick={onRemove} aria-label="削除">
           ×
         </button>
