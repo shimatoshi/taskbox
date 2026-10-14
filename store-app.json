@@ -1,0 +1,11 @@
+{
+  "id": "taskbox",
+  "type": "pwa",
+  "app": {
+    "name": "taskbox",
+    "icon": "https://raw.githubusercontent.com/shimatoshi/app-store-releases/main/icons/taskbox.png",
+    "description": "Offline-first task box PWA",
+    "category": "生産性",
+    "url": "https://taskbox.vercel.app"
+  }
+}
